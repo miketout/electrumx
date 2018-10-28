@@ -342,8 +342,8 @@ class TxJoinSplit(namedtuple("Tx", "version inputs outputs locktime")):
 class DeserializerZcash(DeserializerEquihash):
     def read_tx(self):
         header = self._read_le_uint32()
-        overwinterd = ((header >> 31) == 1)
-        if overwinterd:
+        overwintered = ((header >> 31) == 1)
+        if overwintered:
             version = header & 0x7fffffff
             self._read_le_uint32()  # versionGroupId
         else:
@@ -373,7 +373,7 @@ class DeserializerZcash(DeserializerEquihash):
             if joinsplit_size > 0:
                 if base_tx.version == SAPLING_TX_VERSION:
                     self.cursor += joinsplit_size * 1698    # vJoinSplit using JSDescriptionGroth16
-                else
+                else:
                     self.cursor += joinsplit_size * 1802    # vJoinSplit using JSDescriptionPHGR13
                 self.cursor += 32  # joinSplitPubKey
                 self.cursor += 64  # joinSplitSig
