@@ -39,6 +39,28 @@ from electrumx.lib.util import (
 ZERO = bytes(32)
 MINUS_1 = 4294967295
 
+OVERWINTER_VERSION_GROUP_ID = 0x03C48270
+OVERWINTER_TX_VERSION = 3
+
+SAPLING_VERSION_GROUP_ID = 0x892F2085
+SAPLING_TX_VERSION = 4
+
+# Sapling note magic values, copied from src/zcash/Zcash.h
+NOTEENCRYPTION_AUTH_BYTES = 16
+ZC_NOTEPLAINTEXT_LEADING = 1
+ZC_V_SIZE = 8
+ZC_RHO_SIZE = 32
+ZC_R_SIZE = 32
+ZC_MEMO_SIZE = 512
+ZC_DIVERSIFIER_SIZE = 11
+ZC_JUBJUB_POINT_SIZE = 32
+ZC_JUBJUB_SCALAR_SIZE = 32
+ZC_NOTEPLAINTEXT_SIZE = ZC_NOTEPLAINTEXT_LEADING + ZC_V_SIZE + ZC_RHO_SIZE + ZC_R_SIZE + ZC_MEMO_SIZE
+ZC_SAPLING_ENCPLAINTEXT_SIZE = ZC_NOTEPLAINTEXT_LEADING + ZC_DIVERSIFIER_SIZE + ZC_V_SIZE + ZC_R_SIZE + ZC_MEMO_SIZE
+ZC_SAPLING_OUTPLAINTEXT_SIZE = ZC_JUBJUB_POINT_SIZE + ZC_JUBJUB_SCALAR_SIZE
+ZC_SAPLING_ENCCIPHERTEXT_SIZE = ZC_SAPLING_ENCPLAINTEXT_SIZE + NOTEENCRYPTION_AUTH_BYTES
+ZC_SAPLING_OUTCIPHERTEXT_SIZE = ZC_SAPLING_OUTPLAINTEXT_SIZE + NOTEENCRYPTION_AUTH_BYTES
+
 
 def is_gen_outpoint(hash, index):
     '''Test if an outpoint is a generation/coinbase like'''
@@ -320,8 +342,8 @@ class TxJoinSplit(namedtuple("Tx", "version inputs outputs locktime")):
 class DeserializerZcash(DeserializerEquihash):
     def read_tx(self):
         header = self._read_le_uint32()
-        overwinterd = ((header >> 31) == 1)
-        if overwinterd:
+        overwintered = ((header >> 31) == 1)
+        if overwintered:
             version = header & 0x7fffffff
             self._read_le_uint32()  # versionGroupId
         else:
@@ -332,14 +354,31 @@ class DeserializerZcash(DeserializerEquihash):
             self._read_outputs(),   # outputs
             self._read_le_uint32()  # locktime
         )
-        if base_tx.version >= 3:
+
+        shielded_spend_size = 0
+        shielded_output_size = 0
+        if overwintered and base_tx.version >= OVERWINTER_TX_VERSION:
             self._read_le_uint32()  # expiryHeight
+            if base_tx.version == SAPLING_TX_VERSION:
+                # if Sapling, skip shielded spends and outputs
+                self._read_le_uint64()              # valuebalance
+                shielded_spend_size = self._read_varint()
+                if shielded_spend_size > 0:  
+                    self.cursor += 384 * shielded_spend_size
+                shielded_output_size = self._read_varint()
+                if shielded_output_size > 0:
+                    self.cursor += 948 * shielded_output_size
         if base_tx.version >= 2:
             joinsplit_size = self._read_varint()
             if joinsplit_size > 0:
-                self.cursor += joinsplit_size * 1802  # JSDescription
+                if base_tx.version == SAPLING_TX_VERSION:
+                    self.cursor += joinsplit_size * 1698    # vJoinSplit using JSDescriptionGroth16
+                else:
+                    self.cursor += joinsplit_size * 1802    # vJoinSplit using JSDescriptionPHGR13
                 self.cursor += 32  # joinSplitPubKey
                 self.cursor += 64  # joinSplitSig
+        if base_tx.version == SAPLING_TX_VERSION and (shielded_spend_size + shielded_output_size) > 0:
+            self.cursor += 64   # binding sig
         return base_tx
 
 
