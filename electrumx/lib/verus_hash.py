@@ -458,17 +458,6 @@ def __verusclmulwithoutreduction64alignedrepeat_port(randomsource, buf, keyMask)
 
             acc = _mm_xor_si128_emu(modulo, acc)
 
-            '''
-            modulo1 = dividend % -divisor
-            modulo2 = -modulo1
-
-            print("divisor: ", hex(divisor), " - ", hex(divisor & 0xffffffff))
-            print("modulo: ", hex(modulo), " - ", hex(modulo & 0xffffffff))
-            print("modulo1: ", hex(modulo1), " - ", hex(modulo1 & 0xffffffff))
-            print("modulo2: ", hex(modulo2), " - ", hex(modulo2 & 0xffffffff))
-            print("acc: ", hex(acc))
-            '''
-
             tempa1 = _mm_mulhrs_epi16_emu(acc, temp1)
             tempa2 = _mm_xor_si128_emu(tempa1, temp1)
 
